@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <QStringEncoder>
 #include <QUuid>
 #include <QtDebug>
+#include <QSettings>
 #include <memory>
 #include <sstream>
 #define WIN32_LEAN_AND_MEAN
@@ -453,7 +454,7 @@ namespace shell
     const auto path    = QDir::toNativeSeparators(info.absoluteFilePath());
     const auto ws_path = path.toStdWString();
 
-    return ShellExecuteWrapper(L"explore", ws_path.c_str(), nullptr);
+    return ShellExecuteWrapper(L"open", ws_path.c_str(), nullptr);
   }
 
   Result ExploreFileInDirectory(const QFileInfo& info)
@@ -465,9 +466,24 @@ namespace shell
     return ShellExecuteWrapper(nullptr, L"explorer", ws_params.c_str());
   }
 
+  // Check if Shell Command registry key exists and if it does, does it contain explorer.exe
+  // if it contains explorer.exe return true
+  // if it doesn't exist also return true
+  // only if it doesn't contain explorer.exe (there's a custom folder handler installed) return false
+  bool CheckShellCommandRegistry()
+  {
+    QSettings qs_ShellCommandRegistry;
+    auto shellCommandRegistry = qs_ShellCommandRegistry.value("HKEY_CLASSES_ROOT\\Folder\\shell\\open\\command", "Default").toString();
+
+    if (shellCommandRegistry.isEmpty() ||
+        shellCommandRegistry.contains("explorer.exe", Qt::CaseInsensitive))
+      return true;
+    return false;
+  }
+
   Result Explore(const QFileInfo& info)
   {
-    if (info.isFile()) {
+    if (info.isFile() && CheckShellCommandRegistry()) {
       return ExploreFileInDirectory(info);
     } else if (info.isDir()) {
       return ExploreDirectory(info);
