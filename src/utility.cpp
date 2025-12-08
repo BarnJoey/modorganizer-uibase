@@ -476,8 +476,6 @@ namespace shell
   Result ExploreFileInDirectory(const QFileInfo& info)
   {
     const auto path = ConvertWindowsPathToUnix(QDir::toNativeSeparators(info.absoluteFilePath()));
-
-    //Step 2: use dbus-send to open and select file in default file browser (if supported)
     const auto params =
         "/unix /usr/bin/dbus-send --session --dest=org.freedesktop.FileManager1 --type=method_call "
         "/org/freedesktop/FileManager1 org.freedesktop.FileManager1.ShowItems "
