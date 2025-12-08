@@ -490,7 +490,7 @@ namespace shell
 
   Result Explore(const QFileInfo& info)
   {
-    if (info.isFile() && CheckShellCommandRegistry()) {
+    if (info.isFile()) {
       return ExploreFileInDirectory(info);
     } else if (info.isDir()) {
       return ExploreDirectory(info);
