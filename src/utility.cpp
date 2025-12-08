@@ -30,7 +30,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 #include <QStringEncoder>
 #include <QUuid>
 #include <QtDebug>
-#include <QSettings>
+#include <QProcess>
 #include <memory>
 #include <sstream>
 #define WIN32_LEAN_AND_MEAN
@@ -449,36 +449,43 @@ namespace shell
     return Result::makeSuccess(process);
   }
 
+  static QString ConvertWindowsPathToUnix(QString windowsPath)
+  {
+    QProcess qp_WinePath;
+    QStringList sl_WinePathArgs;
+    sl_WinePathArgs << "-u" << windowsPath;
+
+    qp_WinePath.start("winepath.exe", sl_WinePathArgs);
+
+    if (!qp_WinePath.waitForFinished(1000))
+      return NULL;
+
+    auto winePathOutput = qp_WinePath.readAllStandardOutput();
+    return QString::fromLocal8Bit(winePathOutput);
+  }
+
   Result ExploreDirectory(const QFileInfo& info)
   {
-    const auto path    = QDir::toNativeSeparators(info.absoluteFilePath());
-    const auto ws_path = path.toStdWString();
+    const auto path      = ConvertWindowsPathToUnix(QDir::toNativeSeparators(info.absoluteFilePath()));
+    const auto params    = "/unix /usr/bin/xdg-open \"" + path + "\"";
+    const auto ws_params = params.toStdWString();
 
-    return ShellExecuteWrapper(L"open", ws_path.c_str(), nullptr);
+    return ShellExecuteWrapper(nullptr, L"start", ws_params.c_str());
   }
 
   Result ExploreFileInDirectory(const QFileInfo& info)
   {
-    const auto path      = QDir::toNativeSeparators(info.absoluteFilePath());
-    const auto params    = "/select,\"" + path + "\"";
+    const auto path = ConvertWindowsPathToUnix(QDir::toNativeSeparators(info.absoluteFilePath()));
+
+    //Step 2: use dbus-send to open and select file in default file browser (if supported)
+    const auto params =
+        "/unix /usr/bin/dbus-send --session --dest=org.freedesktop.FileManager1 --type=method_call "
+        "/org/freedesktop/FileManager1 org.freedesktop.FileManager1.ShowItems "
+        "array:string:\"file://" +
+        path + "\" string:\"\"";
     const auto ws_params = params.toStdWString();
 
-    return ShellExecuteWrapper(nullptr, L"explorer", ws_params.c_str());
-  }
-
-  // Check if Shell Command registry key exists and if it does, does it contain explorer.exe
-  // if it contains explorer.exe return true
-  // if it doesn't exist also return true
-  // only if it doesn't contain explorer.exe (there's a custom folder handler installed) return false
-  bool CheckShellCommandRegistry()
-  {
-    QSettings qs_ShellCommandRegistry;
-    auto shellCommandRegistry = qs_ShellCommandRegistry.value("HKEY_CLASSES_ROOT\\Folder\\shell\\open\\command", "Default").toString();
-
-    if (shellCommandRegistry.isEmpty() ||
-        shellCommandRegistry.contains("explorer.exe", Qt::CaseInsensitive))
-      return true;
-    return false;
+    return ShellExecuteWrapper(nullptr, L"start", ws_params.c_str());
   }
 
   Result Explore(const QFileInfo& info)
